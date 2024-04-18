@@ -15,7 +15,7 @@ app.use(cookieParser());
 app.use(express.json());
 
 //MongoDB configurations
-const { MongoClient, ServerApiVersion, Db } = require("mongodb");
+const { MongoClient, ServerApiVersion, Db, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kzkabhj.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -47,6 +47,8 @@ async function run() {
     const studentInfo = eccentric18.collection("studentInfo");
     const gallery = eccentric18.collection("galleryContents");
     const resources = eccentric18.collection("resources");
+    const committee = eccentric18.collection("committee");
+    const pendingUsers = eccentric18.collection("pendingUsers");
     //loading Gallery Images
     app.get("/gallery", async (req, res) => {
       const result = await gallery.find().toArray();
@@ -59,8 +61,20 @@ async function run() {
     });
     // Getting all students
     app.get("/students", async (req, res) => {
-      const projection = { std_id: -1 };
-      const result = await studentInfo.find().toArray();
+      const query = {};
+      const options = {
+        sort: {},
+        projection: {
+          _id: 0,
+          telegram: 0,
+          date_of_birth: 0,
+        },
+      };
+      const result = await studentInfo.find(query, options).toArray();
+      res.send(result);
+    });
+    app.get("/committee", async (req, res) => {
+      const result = await committee.find().toArray();
       res.send(result);
     });
     app.get("/students/:blood_group", async (req, res) => {
@@ -133,10 +147,36 @@ async function run() {
         })
         .send({ success: true });
     });
-    app.get("/userAuth/:email", async (req, res) => {
-      const requestEmail = req.params.email;
-      console.log(requestEmail);
+    app.post("/userAuth/", async (req, res) => {
+      const requestEmail = req.body.email;
+      const options = {
+        projection: {
+          email: 1,
+          name: 1,
+          photoURL: 1,
+          isAdmin: 1,
+        },
+      };
       const result = await studentInfo.findOne({ email: requestEmail });
+      res.send(result);
+    });
+    app.post("/pendingUser", async (req, res) => {
+      const user = req.body;
+      const result = await pendingUsers.insertOne(user);
+      res.send(result);
+    });
+    app.get("/admin/pendingUsers", async (req, res) => {
+      const result = await pendingUsers.find().toArray();
+      res.send(result);
+    });
+    //Admin Routes
+    app.get("/admin/allStudents", async (req, res) => {
+      const result = await studentInfo.find().toArray();
+      res.send(result);
+    });
+    app.delete("/admin/student/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await studentInfo.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
   } finally {
