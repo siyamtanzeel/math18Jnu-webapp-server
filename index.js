@@ -7,7 +7,7 @@ const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173", ""],
     credentials: true,
   })
 );
@@ -26,12 +26,7 @@ const client = new MongoClient(uri, {
   },
 });
 //custom middlewares
-const verifyUser = async (req, res, next) => {
-  const user = req.body;
-  const result = await studentInfo.findOne({ email: user.email });
-  console.log(result);
-  next();
-};
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -49,14 +44,52 @@ async function run() {
     const resources = eccentric18.collection("resources");
     const committee = eccentric18.collection("committee");
     const pendingUsers = eccentric18.collection("pendingUsers");
+    const educationalVideos = eccentric18.collection("educationalVideos");
+    const docs = eccentric18.collection("docs");
+
+    //Middlewares
+    const verifyToken = (req, res, next) => {
+      const token = req?.cookies?.token;
+      if (!token) {
+        return res.status(401).send({ message: "Unauthorized Access" });
+      }
+      jwt.verify(token, process.env.SECRET, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "Unauthorized Access" });
+        }
+        req.user = decoded;
+        next();
+      });
+    };
+    const authorization = async (req, res, next) => {
+      const user = req.user;
+      const result = await studentInfo.findOne({ email: user.email });
+      if (!result) {
+      }
+      if (!result.isAdmin) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
     //loading Gallery Images
     app.get("/gallery", async (req, res) => {
       const result = await gallery.find().toArray();
       res.send(result);
     });
-    // Getting all the resources
+    //Resources Section
+    //links
     app.get("/resources", async (req, res) => {
       const result = await resources.find().toArray();
+      res.send(result);
+    });
+    //videos
+    app.get("/educationalVideos", async (req, res) => {
+      const result = await educationalVideos.find().toArray();
+      res.send(result);
+    });
+    //docs
+    app.get("/docs", async (req, res) => {
+      const result = await docs.find().toArray();
       res.send(result);
     });
     // Getting all students
@@ -137,12 +170,12 @@ async function run() {
     app.post("/jwt", (req, res) => {
       const user = req.body;
       const token = jwt.sign({ email: user.email }, process.env.SECRET, {
-        expiresIn: "1hr",
+        expiresIn: "1h",
       });
       res
         .cookie("token", token, {
           httpOnly: true,
-          secure: false,
+          secure: true,
           sameSite: "none",
         })
         .send({ success: true });
@@ -160,25 +193,75 @@ async function run() {
       const result = await studentInfo.findOne({ email: requestEmail });
       res.send(result);
     });
+    app.post("/logout", (req, res) => {
+      res
+        .clearCookie("token")
+        .status(200)
+        .send({ message: "logged out successfully" });
+    });
     app.post("/pendingUser", async (req, res) => {
       const user = req.body;
       const result = await pendingUsers.insertOne(user);
       res.send(result);
     });
-    app.get("/admin/pendingUsers", async (req, res) => {
-      const result = await pendingUsers.find().toArray();
-      res.send(result);
-    });
     //Admin Routes
-    app.get("/admin/allStudents", async (req, res) => {
-      const result = await studentInfo.find().toArray();
-      res.send(result);
-    });
-    app.delete("/admin/student/:id", async (req, res) => {
-      const id = req.params.id;
-      const result = await studentInfo.deleteOne({ _id: new ObjectId(id) });
-      res.send(result);
-    });
+    app.get(
+      "/admin/pendingUsers",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const result = await pendingUsers.find().toArray();
+        res.send(result);
+      }
+    );
+    app.get(
+      "/admin/allStudents",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        console.log(req.query.email);
+        if (req.user.email !== req.query.email) {
+          return res.status(403).send({ message: "forbidden access" });
+        }
+        const result = await studentInfo.find().toArray();
+
+        res.send(result);
+      }
+    );
+    app.delete(
+      "/admin/student/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const result = await studentInfo.deleteOne({ _id: new ObjectId(id) });
+        res.send(result);
+      }
+    );
+    app.get(
+      "/admin/video/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const result = await educationalVideos.findOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      }
+    );
+    app.put(
+      "/admin/updateVideo/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const result = await educationalVideos.findOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      }
+    );
   } finally {
     // Ensures that the client will close when you finish/error
     //   await client.close();
