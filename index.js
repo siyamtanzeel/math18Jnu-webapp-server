@@ -256,9 +256,78 @@ async function run() {
       authorization,
       async (req, res) => {
         const id = req.params.id;
-        const result = await educationalVideos.findOne({
-          _id: new ObjectId(id),
-        });
+        const { title, term, privacy, videoURLs } = req.body;
+        const updatedVideo = {
+          $set: {
+            title: title,
+            term: term,
+            privacy: privacy,
+            videoURLs: videoURLs,
+          },
+        };
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const result = await educationalVideos.updateOne(
+          filter,
+          updatedVideo,
+          options
+        );
+        // const result = await educationalVideos.findOne({
+        //   _id: new ObjectId(id),
+        // });
+        res.send(result);
+      }
+    );
+    app.get("/admin/link/:id", verifyToken, authorization, async (req, res) => {
+      const id = req.params.id;
+      const result = await resources.findOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+    app.post(
+      "/admin/addLink/",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const link = req.body;
+
+        const result = await resources.insertOne(link);
+
+        res.send(result);
+      }
+    );
+    app.delete(
+      "/admin/deleteLink/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const result = await resources.deleteOne(filter);
+        res.send(result);
+      }
+    );
+    app.put(
+      "/admin/updateLink/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const { title, link, access } = req.body;
+        const updatedLink = {
+          $set: {
+            title: title,
+            link: link,
+            access,
+          },
+        };
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const result = await resources.updateOne(filter, updatedLink, options);
+        // const result = await educationalVideos.findOne({
+        //   _id: new ObjectId(id),
+        // });
         res.send(result);
       }
     );
