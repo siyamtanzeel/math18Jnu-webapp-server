@@ -278,6 +278,74 @@ async function run() {
         res.send(result);
       }
     );
+    app.post(
+      "/admin/addVideo/",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const video = req.body;
+
+        const result = await educationalVideos.insertOne(video);
+
+        res.send(result);
+      }
+    );
+    app.delete(
+      "/admin/deleteVideo/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const result = await educationalVideos.deleteOne(filter);
+        res.send(result);
+      }
+    );
+    app.put(
+      "/admin/updateDoc/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const { title, link, media, category, privacy, term, iat } = req.body;
+        const updatedDoc = {
+          $set: {
+            title: title,
+            link: link,
+            media: media,
+            category: category,
+            privacy: privacy,
+            term: term,
+            iat: iat,
+          },
+        };
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const result = await docs.updateOne(filter, updatedDoc, options);
+        // const result = await educationalVideos.findOne({
+        //   _id: new ObjectId(id),
+        // });
+        res.send(result);
+      }
+    );
+    app.post("/admin/addDoc/", verifyToken, authorization, async (req, res) => {
+      const doc = req.body;
+
+      const result = await docs.insertOne(doc);
+
+      res.send(result);
+    });
+    app.delete(
+      "/admin/deleteDoc/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const result = await docs.deleteOne(filter);
+        res.send(result);
+      }
+    );
     app.get("/admin/link/:id", verifyToken, authorization, async (req, res) => {
       const id = req.params.id;
       const result = await resources.findOne({
