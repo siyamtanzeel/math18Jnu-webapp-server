@@ -7,8 +7,10 @@ const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 app.use(
   cors({
-    origin: ["http://localhost:5173", ""],
-    credentials: true,
+    origin: ["http://localhost:5173", "https://eccentric18.netlify.app"], // Allow requests from the specified origin
+    methods: ["GET", "POST", "PUT", "DELETE"], // Specify allowed methods
+    allowedHeaders: ["Content-Type", "Authorization"], // Specify allowed headers
+    credentials: true, // If you want to allow credentials
   })
 );
 app.use(cookieParser());
@@ -30,12 +32,8 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
 
     // Collections
     const eccentric18 = client.db("eccentric-18");
@@ -65,6 +63,7 @@ async function run() {
       const user = req.user;
       const result = await studentInfo.findOne({ email: user.email });
       if (!result) {
+        return res.status(403).send({ message: "forbidden access" });
       }
       if (!result.isAdmin) {
         return res.status(403).send({ message: "forbidden access" });
@@ -99,6 +98,8 @@ async function run() {
         sort: {},
         projection: {
           _id: 0,
+          email: 0,
+          password: 0,
           telegram: 0,
           date_of_birth: 0,
         },
@@ -120,7 +121,18 @@ async function run() {
     //Getting a specific student by ID
     app.get("/student/:id", async (req, res) => {
       const userId = req.params.id;
-      const student = await studentInfo.findOne({ std_id: userId });
+      const options = {
+        sort: {},
+        projection: {
+          _id: 0,
+          std_id: 0,
+          email: 0,
+          password: 0,
+          telegram: 0,
+          date_of_birth: 0,
+        },
+      };
+      const student = await studentInfo.findOne({ std_id: userId }, options);
       res.send(student);
     });
     //Updating the profile of a User
@@ -180,6 +192,7 @@ async function run() {
         })
         .send({ success: true });
     });
+    //user authentication
     app.post("/userAuth/", async (req, res) => {
       const requestEmail = req.body.email;
       const options = {
@@ -193,18 +206,26 @@ async function run() {
       const result = await studentInfo.findOne({ email: requestEmail });
       res.send(result);
     });
+    //user token clear on log out
     app.post("/logout", (req, res) => {
       res
         .clearCookie("token")
         .status(200)
         .send({ message: "logged out successfully" });
     });
+    // appending pending users to the list
     app.post("/pendingUser", async (req, res) => {
       const user = req.body;
+      const filter = { email: user.email };
+      const doesExist = await studentInfo.findOne(filter);
+      if (doesExist) {
+        return res.status(405).send({ message: "User Already exists!" });
+      }
       const result = await pendingUsers.insertOne(user);
       res.send(result);
     });
     //Admin Routes
+    // getting the list of pending users
     app.get(
       "/admin/pendingUsers",
       verifyToken,
@@ -214,6 +235,19 @@ async function run() {
         res.send(result);
       }
     );
+    // getting a specific pending user
+    app.get(
+      "/admin/pendingUser/:id",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const result = await pendingUsers.findOne(filter);
+        res.send(result);
+      }
+    );
+    // getting the list of all users
     app.get(
       "/admin/allStudents",
       verifyToken,
@@ -228,6 +262,23 @@ async function run() {
         res.send(result);
       }
     );
+    // creating an account
+    app.post(
+      "/admin/addStudent/",
+      verifyToken,
+      authorization,
+      async (req, res) => {
+        const studentData = req.body;
+        const filter = { email: studentData.email };
+        const doesExist = await studentInfo.findOne(filter);
+        if (doesExist) {
+          return res.status(405).send({ message: "User Already Exists" });
+        }
+        const result = await studentInfo.insertOne(studentData);
+        res.send(result);
+      }
+    );
+    // deleting an account
     app.delete(
       "/admin/student/:id",
       verifyToken,
@@ -238,6 +289,7 @@ async function run() {
         res.send(result);
       }
     );
+    // finding a specific video
     app.get(
       "/admin/video/:id",
       verifyToken,
@@ -250,6 +302,7 @@ async function run() {
         res.send(result);
       }
     );
+    // updating a video
     app.put(
       "/admin/updateVideo/:id",
       verifyToken,
@@ -278,6 +331,7 @@ async function run() {
         res.send(result);
       }
     );
+    // adding a video
     app.post(
       "/admin/addVideo/",
       verifyToken,
@@ -290,6 +344,7 @@ async function run() {
         res.send(result);
       }
     );
+    //deleting a video
     app.delete(
       "/admin/deleteVideo/:id",
       verifyToken,
@@ -301,6 +356,15 @@ async function run() {
         res.send(result);
       }
     );
+    //getting a specific doc
+    app.get("/admin/doc/:id", verifyToken, authorization, async (req, res) => {
+      const id = req.params.id;
+      const result = await docs.findOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+    // updating a doc
     app.put(
       "/admin/updateDoc/:id",
       verifyToken,
@@ -328,6 +392,7 @@ async function run() {
         res.send(result);
       }
     );
+    // adding a doc
     app.post("/admin/addDoc/", verifyToken, authorization, async (req, res) => {
       const doc = req.body;
 
@@ -335,6 +400,7 @@ async function run() {
 
       res.send(result);
     });
+    // deleting a doc
     app.delete(
       "/admin/deleteDoc/:id",
       verifyToken,
@@ -346,6 +412,7 @@ async function run() {
         res.send(result);
       }
     );
+    // getting a specific link
     app.get("/admin/link/:id", verifyToken, authorization, async (req, res) => {
       const id = req.params.id;
       const result = await resources.findOne({
@@ -353,6 +420,7 @@ async function run() {
       });
       res.send(result);
     });
+    //adding a link
     app.post(
       "/admin/addLink/",
       verifyToken,
@@ -365,6 +433,7 @@ async function run() {
         res.send(result);
       }
     );
+    // deleting a link
     app.delete(
       "/admin/deleteLink/:id",
       verifyToken,
@@ -376,6 +445,7 @@ async function run() {
         res.send(result);
       }
     );
+    // updating a link
     app.put(
       "/admin/updateLink/:id",
       verifyToken,
